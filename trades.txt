@@ -1,0 +1,22 @@
+# crosses the spread: partial fill, remainder rests at 1006
+A 5 B 1006 120
+
+# time priority: order 6 queues behind order 1 at the same price
+A 6 S 1007 100
+A 7 B 1007 250
+
+# cancel a resting order
+C 3
+
+# aggressive sell sweeps two bid levels
+A 8 S 995 200
+
+# market buy: book runs out, 30 unfilled are discarded
+M 9 B 80
+
+# cancel an order that's already fully filled -> should be rejected, not crash
+C 2
+
+# FIFO at one price: 4 must fill before 10
+A 10 B 998 50
+A 11 S 998 200

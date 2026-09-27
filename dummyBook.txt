@@ -1,0 +1,5 @@
+# build the starting book (no trades)
+A 1 S 1007 200
+A 2 S 1005 50
+A 3 B 1000 100
+A 4 B 998 300
