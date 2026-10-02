@@ -1,6 +1,7 @@
 #ifndef PARSER_H
 #include <string>
 #include <vector>
+#include <map>
 
 struct Order {
     int price;
@@ -12,9 +13,10 @@ class Parser {
         Parser(std::string filename);
         void parseTrades();
     private:
+        void handleOrder(Order o, char side);
         std::string filename;
-        std::vector<Order> bids;
-        std::vector<Order> asks;
+        std::map<int, int> bids;
+        std::map<int, int> asks;
 };
 
 #endif

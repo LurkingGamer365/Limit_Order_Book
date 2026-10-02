@@ -1,7 +1,7 @@
 #include "parser.h"
 
 int main() {
-    Parser p("trades.txt");
+    Parser p("dummyBook.txt");
     p.parseTrades();
     return 0;
 }
