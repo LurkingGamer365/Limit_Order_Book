@@ -8,6 +8,10 @@
 #   make all-modes  build every mode above except asan
 #   make run        build and run (MODE=release etc. to pick a mode,
 #                   FILE=data/trades.txt to pick the input)
+#   make test       build and check every data/*.txt against tests/expected/
+#                   (TEST_MODE=release etc. to pick a mode; default sanitize)
+#   make golden     regenerate tests/expected/ from the current output -
+#                   only after checking the new output is correct
 #   make clean      delete build/
 #
 # Pick a compiler with CXX, e.g. `make release CXX=g++`.
@@ -22,14 +26,17 @@ INC   := -Iinclude
 BUILD := build
 MODE  ?= debug
 FILE  ?= data/dummyBook.txt
+TEST_MODE ?= sanitize
 
 DEBUG_FLAGS    := -O0 -g
 RELEASE_FLAGS  := -O3 -DNDEBUG
 SANITIZE_FLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=undefined \
+                  -fno-sanitize-recover=all \
                   -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_DEBUG
-ASAN_FLAGS     := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined
+ASAN_FLAGS     := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined \
+                  -fno-sanitize-recover=all
 
-.PHONY: all debug release sanitize asan all-modes run clean
+.PHONY: all debug release sanitize asan all-modes run test golden clean
 
 all: debug
 
@@ -50,6 +57,12 @@ $(BUILD)/%/lob: $(SRCS) $(HDRS) Makefile
 
 run: $(BUILD)/$(MODE)/lob
 	./$< $(FILE)
+
+test: $(BUILD)/$(TEST_MODE)/lob
+	./tests/run_tests.sh $<
+
+golden: $(BUILD)/release/lob
+	./tests/run_tests.sh $< --update
 
 clean:
 	rm -rf $(BUILD)

@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / ${{ matrix.cxx }} / ${{ matrix.mode }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        cxx: [g++, clang++]
+        mode: [debug, release, sanitize, asan]
+        include:
+          - os: macos-latest
+            cxx: clang++
+            mode: release
+          - os: macos-latest
+            cxx: clang++
+            mode: sanitize
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compiler version
+        run: ${{ matrix.cxx }} --version
+
+      - name: Build and test
+        run: make test CXX=${{ matrix.cxx }} TEST_MODE=${{ matrix.mode }}
