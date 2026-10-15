@@ -8,3 +8,6 @@ a.out
 
 # local Claude Code settings
 .claude/
+
+# build output
+build/
