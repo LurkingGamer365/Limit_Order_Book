@@ -5,3 +5,6 @@ a.out
 *.out
 *.exe
 *.dSYM/
+
+# local Claude Code settings
+.claude/
