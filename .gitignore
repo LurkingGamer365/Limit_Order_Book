@@ -1,0 +1,7 @@
+# compiled binaries
+test
+a.out
+*.o
+*.out
+*.exe
+*.dSYM/
