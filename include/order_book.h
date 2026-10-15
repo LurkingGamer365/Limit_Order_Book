@@ -5,10 +5,18 @@
 #include <list>
 #include <map>
 #include <unordered_map>
+#include <vector>
 
 struct Order {
     int id;
     char side;
+    int price;
+    int quantity;
+};
+
+struct Trade {
+    int aggressorId;
+    int restingId;
     int price;
     int quantity;
 };
@@ -23,12 +31,12 @@ struct OrderLocation {
 
 class OrderBook {
     public:
-        void addLimit(Order o);
-        void addMarket(Order o);
-        void cancel(int id);
+        void addLimit(Order o, std::vector<Trade>& trades);
+        int addMarket(Order o, std::vector<Trade>& trades);
+        bool cancel(int id);
         void print() const;
     private:
-        void match(Order& o, bool market);
+        void match(Order& o, bool market, std::vector<Trade>& trades);
         void rest(const Order& o);
 
         std::map<int, Level, std::greater<int>> bids;

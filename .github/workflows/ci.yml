@@ -30,3 +30,10 @@ jobs:
 
       - name: Build and test
         run: make test CXX=${{ matrix.cxx }} TEST_MODE=${{ matrix.mode }}
+
+      - name: Stress test on generated orders
+        run: make stress CXX=${{ matrix.cxx }} TEST_MODE=${{ matrix.mode }}
+
+      - name: Benchmark smoke run
+        if: matrix.mode == 'release'
+        run: make bench CXX=${{ matrix.cxx }} BENCH_ORDERS=200000
