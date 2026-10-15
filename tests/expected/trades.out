@@ -1,0 +1,14 @@
+TRADE 50 @ 1005 (aggressor 5, resting 2)
+TRADE 200 @ 1007 (aggressor 7, resting 1)
+TRADE 50 @ 1007 (aggressor 7, resting 6)
+Cancelled 3
+TRADE 70 @ 1006 (aggressor 8, resting 5)
+TRADE 130 @ 998 (aggressor 8, resting 4)
+TRADE 50 @ 1007 (aggressor 9, resting 6)
+Market order 9: 30 unfilled, discarded
+Cancel 2 rejected: not resting in book
+TRADE 170 @ 998 (aggressor 11, resting 4)
+TRADE 30 @ 998 (aggressor 11, resting 10)
+--- ASKS ---
+--- BIDS ---
+998 x 20

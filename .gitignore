@@ -11,3 +11,6 @@ a.out
 
 # build output
 build/
+
+# expected test outputs are not binaries
+!tests/expected/*.out
