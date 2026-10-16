@@ -115,7 +115,19 @@ Both runs compute a checksum of their results. It confirms the two runs did iden
 
 ### Results
 
-_To be added._
+**Baseline** (`std::map` price levels, `std::list` queues, `std::unordered_map` lookup)
+
+Apple M1 Pro, 16 GB, macOS 27.0.1, Apple clang 16.0.0, `-O3`, 1,000,000 orders, seed 42. Each figure is the median of 3 runs.
+
+**Throughput: 12.9 M orders/s**
+
+| Latency (ns) | Count | Mean | p50 | p90 | p99 | p99.9 | Max |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Limit | 520,446 | 87 | 83 | 125 | 167 | 583 | 236,334 |
+| Market | 30,112 | 78 | 83 | 166 | 250 | 500 | 15,500 |
+| Cancel | 449,442 | 67 | 42 | 125 | 250 | 1,667 | 20,250 |
+
+The clock ticks every 41 ns on this machine, so p50 and p90 are rounded to multiples of it. The p99.9 and max values vary noticeably from run to run.
 
 ## Roadmap
 
