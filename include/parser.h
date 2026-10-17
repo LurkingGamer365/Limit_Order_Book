@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include "types.h"
 #include "order_book.h"
 
 enum class Action { Limit, Market, Cancel };
