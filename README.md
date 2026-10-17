@@ -16,23 +16,30 @@ A limit order book and matching engine in C++17. It matches orders by price-time
 
 | Component | Data structure | Why |
 |---|---|---|
-| Price levels | `std::map<int, Level>` | Sorted by price. Bids use `std::greater`, so `begin()` is the best price on both sides. |
+| Price levels | `BookSide`: a `std::vector<Level>` indexed by `price - base` | Reaching a price is arithmetic, not a tree search. Each side tracks the index of its best level and how many levels are non-empty, so checking for an empty side and reading the best price are both O(1). |
 | Orders at one price | `std::list<Order>` | A FIFO queue for time priority. An order can be removed from the middle in O(1). |
 | Order lookup | `std::unordered_map<int, OrderLocation>` | Maps an order id to its side, price and list iterator, so a cancel goes straight to the order. |
 
 | Operation | Cost |
 |---|---|
-| Add an order that doesn't trade | O(log P) |
-| Cancel | O(1) to find, O(log P) if its price level becomes empty |
-| Match | O(log P) per price level consumed, plus O(1) per order filled |
+| Add an order that doesn't trade | O(1) |
+| Cancel | O(1), plus a scan to the next best level if it empties the best level |
+| Match | O(1) per order filled, plus a scan to the next best level each time a level is used up |
 
-P is the number of price levels. `OrderBook` doesn't print anything: it returns `Trade`s to the caller, so the matching engine can be timed on its own.
+The scans move one tick at a time towards worse prices. They're short in practice, because the levels near the best price are almost always occupied. When a side's last level empties, the side is marked empty without scanning.
+
+`OrderBook` doesn't print anything: it returns `Trade`s to the caller, so the matching engine can be timed on its own.
+
+**Limitation:** the price window is fixed when the book is created. The default is prices 0 to 65,535, which covers the test scenarios and the generated orders. Orders priced outside it aren't handled yet; see the roadmap.
 
 ## Project layout
 
 ```
-include/   order_book.h, parser.h     public headers
-src/       order_book.cpp, parser.cpp the order book and input parser
+include/   order_book.h               the order book
+           book_side.h                one side of the book: the price-level array
+           types.h                    Order, Trade and Level
+           parser.h                   the input parser
+src/       order_book.cpp, book_side.cpp, parser.cpp
 apps/      main.cpp                   lob:   replays an order file and prints trades
            generate.cpp               gen:   writes a synthetic order stream
            bench.cpp                  bench: measures throughput and per-operation latency
@@ -115,23 +122,39 @@ Both runs compute a checksum of their results. It confirms the two runs did iden
 
 ### Results
 
-**Baseline** (`std::map` price levels, `std::list` queues, `std::unordered_map` lookup)
+Apple M1 Pro, 16 GB, macOS 27.0.1, Apple clang 16.0.0, `-O3`, 1,000,000 orders, seed 42. Both versions ran on the same order file in one session, alternating between them, 3 runs each. Each figure is the median of the 3 runs.
 
-Apple M1 Pro, 16 GB, macOS 27.0.1, Apple clang 16.0.0, `-O3`, 1,000,000 orders, seed 42. Each figure is the median of 3 runs.
+| Version | Throughput | Limit mean | Market mean | Cancel mean |
+|---|---:|---:|---:|---:|
+| `std::map` price levels (baseline) | 13.4 M orders/s | 88 ns | 78 ns | 68 ns |
+| Flat array price levels | **17.2 M orders/s** | **68 ns** | **71 ns** | **52 ns** |
 
-**Throughput: 12.9 M orders/s**
+Both versions produce identical output on all 1,000,000 orders.
+
+**Flat array price levels** (current)
 
 | Latency (ns) | Count | Mean | p50 | p90 | p99 | p99.9 | Max |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Limit | 520,446 | 87 | 83 | 125 | 167 | 583 | 236,334 |
-| Market | 30,112 | 78 | 83 | 166 | 250 | 500 | 15,500 |
-| Cancel | 449,442 | 67 | 42 | 125 | 250 | 1,667 | 20,250 |
+| Limit | 520,446 | 68 | 42 | 84 | 167 | 667 | 246,791 |
+| Market | 30,112 | 71 | 42 | 125 | 250 | 417 | 4,541 |
+| Cancel | 449,442 | 52 | 42 | 84 | 125 | 417 | 18,542 |
+
+**`std::map` price levels** (baseline)
+
+| Latency (ns) | Count | Mean | p50 | p90 | p99 | p99.9 | Max |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Limit | 520,446 | 88 | 83 | 125 | 208 | 1,416 | 237,834 |
+| Market | 30,112 | 78 | 83 | 166 | 291 | 792 | 10,833 |
+| Cancel | 449,442 | 68 | 42 | 125 | 250 | 2,500 | 35,000 |
 
 The clock ticks every 41 ns on this machine, so p50 and p90 are rounded to multiples of it. The p99.9 and max values vary noticeably from run to run.
 
+The flat array roughly halved the median latency of limit and market orders. The worst case for limit orders stayed at about 240 µs, though. That points at allocating a `std::list` node for every order, rather than at finding price levels, and it's what the order pool on the roadmap is meant to fix.
+
 ## Roadmap
 
-- [ ] Price levels in a flat array indexed by price tick, instead of `std::map`
+- [x] Price levels in a flat array indexed by price tick, instead of `std::map`
+- [ ] Handle orders priced outside the array window, in an overflow structure
 - [ ] Intrusive order lists backed by a pre-allocated pool, instead of `std::list`
 - [ ] Order lookup in a flat vector, instead of `std::unordered_map`
 - [ ] No memory allocation on the matching path
