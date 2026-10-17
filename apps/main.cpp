@@ -23,7 +23,9 @@ int main(int argc, char* argv[]) {
         trades.clear();
         switch(c.action){
             case Action::Limit:
-                book.addLimit(c.order, trades);
+                if(!book.addLimit(c.order, trades)){
+                    cout << "Order " << c.order.id << " rejected: price " << c.order.price << " out of range\n";
+                }
                 printTrades(trades);
                 break;
             case Action::Market: {

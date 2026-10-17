@@ -1,0 +1,11 @@
+Order 3 rejected: price -1 out of range
+Order 4 rejected: price 65536 out of range
+Order 5 rejected: price 99999 out of range
+Cancel 3 rejected: not resting in book
+Cancel 4 rejected: not resting in book
+TRADE 5 @ 0 (aggressor 6, resting 1)
+TRADE 5 @ 65535 (aggressor 7, resting 2)
+--- ASKS ---
+65535 x 5
+--- BIDS ---
+0 x 5
