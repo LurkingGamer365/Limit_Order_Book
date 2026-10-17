@@ -11,6 +11,7 @@ A limit order book and matching engine in C++17. It matches orders by price-time
 - **Market orders:** fill at any price. Whatever can't be filled is discarded.
 - **Cancels:** an order can be cancelled by id in O(1). Cancelling an order that has already been filled, or never existed, is rejected.
 - **Partial fills:** an order can trade against several resting orders and price levels.
+- **Price window:** a limit order priced outside the book's price window is rejected, never stored, so it can't index outside the price-level array.
 
 ## Design
 
@@ -30,7 +31,7 @@ The scans move one tick at a time towards worse prices. They're short in practic
 
 `OrderBook` doesn't print anything: it returns `Trade`s to the caller, so the matching engine can be timed on its own.
 
-**Limitation:** the price window is fixed when the book is created. The default is prices 0 to 65,535, which covers the test scenarios and the generated orders. Orders priced outside it aren't handled yet; see the roadmap.
+**Price window:** the window is fixed when the book is created, and the default is prices 0 to 65,535. A limit order priced outside it is rejected, even one that would have traded completely without resting. That's similar to the price bands real exchanges use. Market orders and cancels have no price to check, so they're unaffected. Accepting out-of-window orders with an overflow structure is on the roadmap.
 
 ## Project layout
 
@@ -91,7 +92,7 @@ make test      # replay every data/*.txt and compare with tests/expected/
 make stress    # run 200,000 generated orders under the sanitizer build
 ```
 
-- **Golden tests:** the files in `data/` are hand-written scenarios covering partial fills, time priority, sweeping several price levels, market orders running out of liquidity, and cancels of filled orders. The expected output for each was checked by hand.
+- **Golden tests:** the files in `data/` are hand-written scenarios covering partial fills, time priority, sweeping several price levels, market orders running out of liquidity, cancels of filled orders, and prices on and just outside the edges of the price window. The expected output for each was checked by hand.
 - **Stress test:** runs a large generated order stream and fails on any crash or sanitizer error.
 - **CI:** every push runs both on Linux (`g++` and `clang++`, in debug, release, sanitize and AddressSanitizer mode) and on macOS.
 
@@ -154,7 +155,8 @@ The flat array roughly halved the median latency of limit and market orders. The
 ## Roadmap
 
 - [x] Price levels in a flat array indexed by price tick, instead of `std::map`
-- [ ] Handle orders priced outside the array window, in an overflow structure
+- [x] Reject orders priced outside the array window
+- [ ] Accept orders priced outside the window, in an overflow structure
 - [ ] Intrusive order lists backed by a pre-allocated pool, instead of `std::list`
 - [ ] Order lookup in a flat vector, instead of `std::unordered_map`
 - [ ] No memory allocation on the matching path

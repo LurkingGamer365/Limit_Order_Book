@@ -34,9 +34,12 @@ void OrderBook::match(Order& o, bool market, vector<Trade>& trades){
     else matchAgainst(o, this->bids, this->orders, market, trades);
 }
 
-void OrderBook::addLimit(Order o, vector<Trade>& trades){
+bool OrderBook::addLimit(Order o, vector<Trade>& trades){
+    BookSide& side = (o.side == 'B') ? this->bids : this->asks;
+    if(side.outRange(o.price)) return false;
     this->match(o, false, trades);
     if(o.quantity > 0) this->rest(o);
+    return true;
 }
 
 int OrderBook::addMarket(Order o, vector<Trade>& trades){

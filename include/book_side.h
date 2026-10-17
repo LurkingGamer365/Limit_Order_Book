@@ -10,6 +10,7 @@ class BookSide {
         bool empty() const {return activeLevels == 0;}
         int bestPrice() const {return best + base; }
         int levelCount() const {return activeLevels;};
+        bool outRange(int price) const {return price - base < 0 || price - base >= static_cast<int>(levels.size());}
         Level& level(int price) {return levels[price - base];}
         const Level& level(int price) const {return levels[price - base];}
         void levelEmptied(int price);

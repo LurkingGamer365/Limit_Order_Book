@@ -1,0 +1,20 @@
+# the book's price window is 0 to 65535 inclusive
+
+# prices exactly on the edges are accepted and rest
+A 1 B 0 10
+A 2 S 65535 10
+
+# one tick outside each edge is rejected and never rests
+A 3 B -1 10
+A 4 S 65536 10
+
+# far outside the window, the "buy at 1" case from the other direction
+A 5 S 99999 10
+
+# rejected orders were never in the book, so cancelling them is rejected too
+C 3
+C 4
+
+# normal orders still work and can trade against the edge orders
+A 6 S 0 5
+A 7 B 65535 5

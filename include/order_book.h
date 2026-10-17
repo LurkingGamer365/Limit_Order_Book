@@ -12,7 +12,7 @@
 class OrderBook {
     public:
         OrderBook(int base = 0, int size = 65536);
-        void addLimit(Order o, std::vector<Trade>& trades);
+        bool addLimit(Order o, std::vector<Trade>& trades);
         int addMarket(Order o, std::vector<Trade>& trades);
         bool cancel(int id);
         void print() const;
