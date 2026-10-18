@@ -126,28 +126,31 @@ Both runs compute a checksum of their results. It confirms the two runs did iden
 
 ### Results
 
-Apple M1 Pro, 16 GB, macOS 27.0.1, Apple clang 16.0.0, `-O3`, 1,000,000 orders, seed 42.
+Apple M1 Pro, 16 GB, macOS 27.0.1, Apple clang 16.0.0, `-O3`, 1,000,000 orders, seed 42, on mains power.
 
-Each optimisation was measured against the version before it, in the same session, alternating between the two, 3 runs each. Each figure is the median of the 3 runs, and every version produces identical output on all 1,000,000 orders. Separate sessions ran under different conditions (the flat order index on battery power), so compare the numbers within a row, not between rows.
+All three versions were built from their own commits and measured in one session, taking turns, 3 runs each. Each figure is the median of the 3 runs. All three produce the same checksum, so they do identical work.
 
-| Change | Throughput | Limit mean | Cancel mean | Limit max |
-|---|---:|---:|---:|---:|
-| Flat array price levels (replacing `std::map`) | 13.4 → **17.2** M orders/s | 88 → **68** ns | 68 → **52** ns | ~238 → ~247 µs |
-| Flat order index (replacing `std::unordered_map`) | 16.0 → **34.5** M orders/s | 69 → **34** ns | 56 → **30** ns | ~240 → **~28 µs** |
+| Version | Throughput | Limit mean | Market mean | Cancel mean | Limit max |
+|---|---:|---:|---:|---:|---:|
+| Baseline: `std::map` price levels, `std::unordered_map` lookup | 12.9 M orders/s | 87 ns | 79 ns | 73 ns | 213,583 ns |
+| Flat array price levels | 16.8 M orders/s | 67 ns | 72 ns | 55 ns | 260,375 ns |
+| Flat array price levels and flat order index (current) | **35.8 M orders/s** | **34 ns** | **35 ns** | **37 ns** | **14,875 ns** |
 
-**Current version** (flat array price levels, flat order index)
+**Current version**
 
 | Latency (ns) | Count | Mean | p50 | p90 | p99 | p99.9 | Max |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Limit | 520,446 | 34 | 42 | 42 | 83 | 166 | 27,500 |
-| Market | 30,112 | 33 | 41 | 42 | 84 | 167 | 5,208 |
-| Cancel | 449,442 | 30 | 41 | 42 | 84 | 250 | 28,000 |
+| Limit | 520,446 | 34 | 42 | 42 | 84 | 708 | 14,875 |
+| Market | 30,112 | 35 | 41 | 42 | 84 | 209 | 4,250 |
+| Cancel | 449,442 | 37 | 41 | 42 | 167 | 2,834 | 15,375 |
 
 The clock ticks every 41 ns on this machine, so p50 and p90 are rounded to multiples of it. Most operations now finish within a single tick, so the means and the throughput are better measures of the remaining differences. The p99.9 and max values vary noticeably from run to run.
 
 **What each step showed**
-- **Flat array price levels:** roughly halved the median latency of limit and market orders. The worst case for limit orders stayed at about 240 µs, which the experiment below traced to the order lookup map.
-- **Flat order index:** roughly doubled throughput and cut the limit-order worst case from about 240 µs to about 28 µs. That's more than pre-sizing the map achieved, because `std::unordered_map` also allocates a separate node in memory for every order it stores and frees it when the order leaves. The vector does no allocation after the book is created.
+- **Flat array price levels:** about 30% more throughput, with lower mean latency for every operation. The worst case for limit orders didn't improve, staying in the hundreds of microseconds. The experiment below traced that to the order lookup map.
+- **Flat order index:** more than doubled throughput again, and cut the limit-order worst case from about 260 µs to about 15 µs. That's more than pre-sizing the map achieved, because `std::unordered_map` also allocates a separate node in memory for every order it stores and frees it when the order leaves. The vector does no allocation after the book is created.
+
+Overall, the current version handles 2.8 times as many orders per second as the baseline.
 
 <details>
 <summary>Full latency tables for earlier versions</summary>
@@ -156,17 +159,17 @@ The clock ticks every 41 ns on this machine, so p50 and p90 are rounded to multi
 
 | Latency (ns) | Count | Mean | p50 | p90 | p99 | p99.9 | Max |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Limit | 520,446 | 68 | 42 | 84 | 167 | 667 | 246,791 |
-| Market | 30,112 | 71 | 42 | 125 | 250 | 417 | 4,541 |
-| Cancel | 449,442 | 52 | 42 | 84 | 125 | 417 | 18,542 |
+| Limit | 520,446 | 67 | 83 | 84 | 167 | 375 | 260,375 |
+| Market | 30,112 | 72 | 42 | 125 | 250 | 416 | 4,084 |
+| Cancel | 449,442 | 55 | 42 | 84 | 167 | 541 | 36,416 |
 
-**`std::map` price levels** (baseline)
+**Baseline**
 
 | Latency (ns) | Count | Mean | p50 | p90 | p99 | p99.9 | Max |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Limit | 520,446 | 88 | 83 | 125 | 208 | 1,416 | 237,834 |
-| Market | 30,112 | 78 | 83 | 166 | 291 | 792 | 10,833 |
-| Cancel | 449,442 | 68 | 42 | 125 | 250 | 2,500 | 35,000 |
+| Limit | 520,446 | 87 | 83 | 125 | 208 | 958 | 213,583 |
+| Market | 30,112 | 79 | 83 | 166 | 292 | 667 | 4,584 |
+| Cancel | 449,442 | 73 | 42 | 125 | 292 | 2,959 | 35,084 |
 
 </details>
 
