@@ -124,6 +124,16 @@ The order file is parsed into memory before any timing starts. The commands then
 
 Both runs compute a checksum of their results. It confirms the two runs did identical work and stops the compiler from optimising the work away. The benchmark also reports the system clock's tick size, because latencies are rounded to it: about 41 ns on Apple Silicon.
 
+### Clock resolution, and why p50 can read 0
+
+On Apple Silicon the timer advances in steps of about 41.7 ns. It's a counter that goes up 24 million times a second. Each operation is timed by reading the counter before and after it, so every measurement is a whole number of ticks: 0, 41.7 ns, 83.3 ns, and so on.
+
+An operation that takes about 21 ns, half a tick, reads as 41.7 ns if a tick happens during it, and as 0 if not. That happens about 50% of the time. So when operations are faster than one tick, roughly half of them measure as 0, and the median (p50) can be 0. It means the operation finished between two ticks, not that it took no time.
+
+Each reading is rounded, but over hundreds of thousands of operations the rounding averages out: a 21 ns operation that reads 41.7 about half the time averages about 21 ns. So the **mean** latency stays accurate. **Throughput** is timed once over the whole run, so the clock's resolution doesn't affect it. At these speeds, the mean and the throughput are the numbers to compare.
+
+Finer measurement would need either timing batches of operations and dividing, which hides individual outliers, or a finer clock, such as the CPU cycle counter (`rdtsc`) on x86 Linux. On macOS, the 41.7 ns timer is the finest one an ordinary program can read.
+
 ### Results
 
 Apple M1 Pro, 16 GB, macOS 27.0.1, Apple clang 16.0.0, `-O3`, 1,000,000 orders, seed 42, on mains power.
@@ -145,7 +155,7 @@ All four versions were built from their own commits and measured in one session,
 | Market | 30,112 | 21 | 0 | 42 | 42 | 84 | 2,167 |
 | Cancel | 449,442 | 18 | 0 | 42 | 42 | 84 | 15,791 |
 
-The clock ticks every 41 ns on this machine, so each latency is rounded to a multiple of it. In the current version, more than half of all operations finish within a single tick, so the clock reads the same value before and after and p50 shows 0. The means and the throughput are the meaningful measures at this speed. The p99.9 and max values vary noticeably from run to run.
+The clock ticks every 41 ns on this machine, so each latency is rounded to a multiple of it. In the current version, more than half of all operations finish between two ticks, so p50 reads 0 (see [Clock resolution](#clock-resolution-and-why-p50-can-read-0)). The means and the throughput are the meaningful measures at this speed. The p99.9 and max values vary noticeably from run to run.
 
 **What each step showed**
 - **Flat array price levels:** about 35% more throughput, and lower mean latency for every operation. The worst case for limit orders didn't improve, staying in the hundreds of microseconds. The experiment below traced that to the order lookup map.
