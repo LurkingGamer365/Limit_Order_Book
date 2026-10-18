@@ -1,8 +1,6 @@
 #ifndef TYPES_H
 #define TYPES_H
 
-#include <list>
-
 struct Order {
     int id;
     char side;
@@ -17,12 +15,16 @@ struct Trade {
     int quantity;
 };
 
-using Level = std::list<Order>;
+struct Level {
+    int head = -1;
+    int tail = -1;
+    bool empty() const { return head == -1; }
+};
 
-struct OrderLocation {
-    char side;
-    int price;
-    Level::iterator it;
+struct OrderNode {
+    Order order;
+    int prev = -1;
+    int next = -1;
     bool live = false;
 };
 
