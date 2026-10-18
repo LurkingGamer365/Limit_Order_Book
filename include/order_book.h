@@ -20,7 +20,7 @@ class OrderBook {
 
         BookSide bids;
         BookSide asks;
-        std::vector<OrderLocation> orders;
+        std::vector<OrderNode> nodes;
 };
 
 #endif
