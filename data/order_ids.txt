@@ -1,0 +1,18 @@
+# order ids index the order lookup directly; the book is sized to the largest id in the file
+
+A 1 B 1000 10
+
+# an id that is still resting can't be reused; order 1 is left untouched
+A 1 S 1005 10
+
+# a negative id can't index the lookup, so it's rejected and can't be cancelled
+A -1 B 999 10
+C -1
+
+# once order 1 is cancelled its id is free, and a new order can use it
+C 1
+A 1 S 1005 10
+
+# the new order 1 trades and cancels like any other order
+A 2 B 1005 4
+C 1

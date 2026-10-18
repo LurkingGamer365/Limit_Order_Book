@@ -5,7 +5,7 @@
 #include "order_book.h"
 using namespace std;
 
-static void matchAgainst(Order& incoming, BookSide& book, unordered_map<int, OrderLocation>& orders, bool market, vector<Trade>& trades){
+static void matchAgainst(Order& incoming, BookSide& book, vector<OrderLocation>& orders, bool market, vector<Trade>& trades){
     while(incoming.quantity > 0 && !book.empty()){
         if(!market && !book.crosses(incoming.price)) break;
 
@@ -18,7 +18,7 @@ static void matchAgainst(Order& incoming, BookSide& book, unordered_map<int, Ord
             resting.quantity -= traded;
             trades.push_back({incoming.id, resting.id, levelPrice, traded});
             if(resting.quantity == 0){
-                orders.erase(resting.id);
+                orders[resting.id].live = false;
                 level.pop_front();
             }
         }
@@ -26,20 +26,22 @@ static void matchAgainst(Order& incoming, BookSide& book, unordered_map<int, Ord
     }
 }
 
-OrderBook::OrderBook(int base, int size) 
-    : bids(true, base, size), asks(false, base, size) {}
+OrderBook::OrderBook(int maxOrderId, int base, int size)
+    : bids(true, base, size), asks(false, base, size), orders(maxOrderId + 1) {}
 
 void OrderBook::match(Order& o, bool market, vector<Trade>& trades){
     if(o.side == 'B') matchAgainst(o, this->asks, this->orders, market, trades);
     else matchAgainst(o, this->bids, this->orders, market, trades);
 }
 
-bool OrderBook::addLimit(Order o, vector<Trade>& trades){
+AddResult OrderBook::addLimit(Order o, vector<Trade>& trades){
     BookSide& side = (o.side == 'B') ? this->bids : this->asks;
-    if(side.outRange(o.price)) return false;
+    if(side.outRange(o.price)) return AddResult::PriceOutOfRange;
+    if(o.id < 0 || o.id >= static_cast<int>(this->orders.size())) return AddResult::IdOutOfRange;
+    if(this->orders[o.id].live) return AddResult::DuplicateId;
     this->match(o, false, trades);
     if(o.quantity > 0) this->rest(o);
-    return true;
+    return AddResult::Accepted;
 }
 
 int OrderBook::addMarket(Order o, vector<Trade>& trades){
@@ -52,14 +54,14 @@ void OrderBook::rest(const Order& o){
     Level& level = bookSide.level(o.price);
     if(level.empty()) bookSide.levelFilled(o.price);
     level.push_back(o);
-    this->orders[o.id] = {o.side, o.price, prev(level.end())};
+    this->orders[o.id] = {o.side, o.price, prev(level.end()), true};
 }
 
 bool OrderBook::cancel(int id){
-    auto found = this->orders.find(id);
-    if(found == this->orders.end()) return false;
-    OrderLocation loc = found->second;
-    this->orders.erase(found);
+    if(id < 0 || id >= static_cast<int>(this->orders.size())) return false;
+    OrderLocation& loc = this->orders[id];
+    if(!loc.live) return false;
+    loc.live = false;
 
     BookSide& bookSide = (loc.side == 'B') ? this->bids : this->asks;
     Level& level = bookSide.level(loc.price);

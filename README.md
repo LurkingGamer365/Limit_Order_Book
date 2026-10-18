@@ -12,6 +12,7 @@ A limit order book and matching engine in C++17. It matches orders by price-time
 - **Cancels:** an order can be cancelled by id in O(1). Cancelling an order that has already been filled, or never existed, is rejected.
 - **Partial fills:** an order can trade against several resting orders and price levels.
 - **Price window:** a limit order priced outside the book's price window is rejected, never stored, so it can't index outside the price-level array.
+- **Order id checks:** a limit order is rejected if its id is out of range or already in use by a resting order.
 
 ## Design
 
@@ -19,7 +20,7 @@ A limit order book and matching engine in C++17. It matches orders by price-time
 |---|---|---|
 | Price levels | `BookSide`: a `std::vector<Level>` indexed by `price - base` | Reaching a price is arithmetic, not a tree search. Each side tracks the index of its best level and how many levels are non-empty, so checking for an empty side and reading the best price are both O(1). |
 | Orders at one price | `std::list<Order>` | A FIFO queue for time priority. An order can be removed from the middle in O(1). |
-| Order lookup | `std::unordered_map<int, OrderLocation>` | Maps an order id to its side, price and list iterator, so a cancel goes straight to the order. |
+| Order lookup | `std::vector<OrderLocation>` indexed by order id | Maps an order id to its side, price, list iterator and whether it's still resting, so a cancel goes straight to the order. Sized once when the book is created, so there's no hashing, no memory allocation and no rebuilding while the book runs. |
 
 | Operation | Cost |
 |---|---|
@@ -30,6 +31,8 @@ A limit order book and matching engine in C++17. It matches orders by price-time
 The scans move one tick at a time towards worse prices. They're short in practice, because the levels near the best price are almost always occupied. When a side's last level empties, the side is marked empty without scanning.
 
 `OrderBook` doesn't print anything: it returns `Trade`s to the caller, so the matching engine can be timed on its own.
+
+**Order ids:** the lookup is indexed by order id, so ids must be dense, counting up from 0 or 1 without huge gaps. That's true within a trading session on a real exchange, and true of the generated orders. `lob` and `bench` size the book to the largest id in their input. A limit order is rejected if its id is outside that range, or if another order with the same id is still resting. Once an order has been filled or cancelled, its id can be used again.
 
 **Price window:** the window is fixed when the book is created, and the default is prices 0 to 65,535. A limit order priced outside it is rejected, even one that would have traded completely without resting. That's similar to the price bands real exchanges use. Market orders and cancels have no price to check, so they're unaffected. Accepting out-of-window orders with an overflow structure is on the roadmap.
 
@@ -92,7 +95,7 @@ make test      # replay every data/*.txt and compare with tests/expected/
 make stress    # run 200,000 generated orders under the sanitizer build
 ```
 
-- **Golden tests:** the files in `data/` are hand-written scenarios covering partial fills, time priority, sweeping several price levels, market orders running out of liquidity, cancels of filled orders, and prices on and just outside the edges of the price window. The expected output for each was checked by hand.
+- **Golden tests:** the files in `data/` are hand-written scenarios covering partial fills, time priority, sweeping several price levels, market orders running out of liquidity, cancels of filled orders, prices on and just outside the edges of the price window, and the order id rules (a duplicate resting id, a negative id, and reusing a cancelled order's id). The expected output for each was checked by hand.
 - **Stress test:** runs a large generated order stream and fails on any crash or sanitizer error.
 - **CI:** every push runs both on Linux (`g++` and `clang++`, in debug, release, sanitize and AddressSanitizer mode) and on macOS.
 
@@ -123,16 +126,33 @@ Both runs compute a checksum of their results. It confirms the two runs did iden
 
 ### Results
 
-Apple M1 Pro, 16 GB, macOS 27.0.1, Apple clang 16.0.0, `-O3`, 1,000,000 orders, seed 42. Both versions ran on the same order file in one session, alternating between them, 3 runs each. Each figure is the median of the 3 runs.
+Apple M1 Pro, 16 GB, macOS 27.0.1, Apple clang 16.0.0, `-O3`, 1,000,000 orders, seed 42.
 
-| Version | Throughput | Limit mean | Market mean | Cancel mean |
+Each optimisation was measured against the version before it, in the same session, alternating between the two, 3 runs each. Each figure is the median of the 3 runs, and every version produces identical output on all 1,000,000 orders. Separate sessions ran under different conditions (the flat order index on battery power), so compare the numbers within a row, not between rows.
+
+| Change | Throughput | Limit mean | Cancel mean | Limit max |
 |---|---:|---:|---:|---:|
-| `std::map` price levels (baseline) | 13.4 M orders/s | 88 ns | 78 ns | 68 ns |
-| Flat array price levels | **17.2 M orders/s** | **68 ns** | **71 ns** | **52 ns** |
+| Flat array price levels (replacing `std::map`) | 13.4 → **17.2** M orders/s | 88 → **68** ns | 68 → **52** ns | ~238 → ~247 µs |
+| Flat order index (replacing `std::unordered_map`) | 16.0 → **34.5** M orders/s | 69 → **34** ns | 56 → **30** ns | ~240 → **~28 µs** |
 
-Both versions produce identical output on all 1,000,000 orders.
+**Current version** (flat array price levels, flat order index)
 
-**Flat array price levels** (current)
+| Latency (ns) | Count | Mean | p50 | p90 | p99 | p99.9 | Max |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Limit | 520,446 | 34 | 42 | 42 | 83 | 166 | 27,500 |
+| Market | 30,112 | 33 | 41 | 42 | 84 | 167 | 5,208 |
+| Cancel | 449,442 | 30 | 41 | 42 | 84 | 250 | 28,000 |
+
+The clock ticks every 41 ns on this machine, so p50 and p90 are rounded to multiples of it. Most operations now finish within a single tick, so the means and the throughput are better measures of the remaining differences. The p99.9 and max values vary noticeably from run to run.
+
+**What each step showed**
+- **Flat array price levels:** roughly halved the median latency of limit and market orders. The worst case for limit orders stayed at about 240 µs, which the experiment below traced to the order lookup map.
+- **Flat order index:** roughly doubled throughput and cut the limit-order worst case from about 240 µs to about 28 µs. That's more than pre-sizing the map achieved, because `std::unordered_map` also allocates a separate node in memory for every order it stores and frees it when the order leaves. The vector does no allocation after the book is created.
+
+<details>
+<summary>Full latency tables for earlier versions</summary>
+
+**Flat array price levels**
 
 | Latency (ns) | Count | Mean | p50 | p90 | p99 | p99.9 | Max |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -148,9 +168,20 @@ Both versions produce identical output on all 1,000,000 orders.
 | Market | 30,112 | 78 | 83 | 166 | 291 | 792 | 10,833 |
 | Cancel | 449,442 | 68 | 42 | 125 | 250 | 2,500 | 35,000 |
 
-The clock ticks every 41 ns on this machine, so p50 and p90 are rounded to multiples of it. The p99.9 and max values vary noticeably from run to run.
+</details>
 
-The flat array roughly halved the median latency of limit and market orders. The worst case for limit orders stayed at about 240 µs, though. That points at allocating a `std::list` node for every order, rather than at finding price levels, and it's what the order pool on the roadmap is meant to fix.
+### Finding the worst case: pre-sizing the order map
+
+This was an experiment to find what causes the ~240 µs worst case, not a change to the code. The id lookup map (`std::unordered_map`) was pre-sized with `orders.reserve(1 << 20)`, so it never has to grow during a run. Both versions ran alternately on the same 1,000,000 orders (on battery power, so compare these runs only with each other). Each figure is the median of 3 runs.
+
+| | Throughput | Limit mean | Limit p99.9 | Limit max | Cancel max |
+|---|---:|---:|---:|---:|---:|
+| Current code | 16.4 M orders/s | 69 ns | 458 ns | 239,583 ns | 25,959 ns |
+| Map pre-sized | **18.4 M orders/s** | **59 ns** | **416 ns** | **35,334 ns** | **24,750 ns** |
+
+Both versions produce the same checksum, so they did identical work.
+
+The worst case for limit orders fell from about 240 µs to about 35 µs. The spike came from the map growing: when an `unordered_map` fills past its capacity, it allocates a bigger table and re-inserts every entry at once, and with hundreds of thousands of live orders that takes hundreds of microseconds. That led to the flat order index above, which avoids the rebuild, the hashing and the per-order allocation.
 
 ## Roadmap
 
@@ -158,7 +189,7 @@ The flat array roughly halved the median latency of limit and market orders. The
 - [x] Reject orders priced outside the array window
 - [ ] Accept orders priced outside the window, in an overflow structure
 - [ ] Intrusive order lists backed by a pre-allocated pool, instead of `std::list`
-- [ ] Order lookup in a flat vector, instead of `std::unordered_map`
+- [x] Order lookup in a flat vector, instead of `std::unordered_map`
 - [ ] No memory allocation on the matching path
 - [ ] Order modify (a quantity reduction keeps queue priority)
 - [ ] Immediate-or-cancel (IOC) and fill-or-kill (FOK) orders

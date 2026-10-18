@@ -21,4 +21,6 @@ class Parser {
         std::string filename;
 };
 
+int maxOrderId(const std::vector<Command>& commands);
+
 #endif

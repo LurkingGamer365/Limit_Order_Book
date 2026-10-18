@@ -66,7 +66,7 @@ int main(int argc, char* argv[]){
     vector<Trade> trades;
     trades.reserve(1024);
 
-    OrderBook throughputBook;
+    OrderBook throughputBook(maxOrderId(commands));
     uint64_t throughputChecksum = 0;
     auto runStart = Clock::now();
     for(const Command& c : commands) execute(throughputBook, c, trades, throughputChecksum);
@@ -77,7 +77,7 @@ int main(int argc, char* argv[]){
     marketNs.reserve(commands.size());
     cancelNs.reserve(commands.size());
 
-    OrderBook latencyBook;
+    OrderBook latencyBook(maxOrderId(commands));
     uint64_t latencyChecksum = 0;
     for(const Command& c : commands){
         auto t0 = Clock::now();

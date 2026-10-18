@@ -23,6 +23,7 @@ struct OrderLocation {
     char side;
     int price;
     Level::iterator it;
+    bool live = false;
 };
 
 #endif
