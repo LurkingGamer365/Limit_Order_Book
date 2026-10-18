@@ -17,14 +17,23 @@ int main(int argc, char* argv[]) {
     vector<Command> commands;
     if(!Parser(filename).parse(commands)) return 1;
 
-    OrderBook book;
+    OrderBook book(maxOrderId(commands));
     vector<Trade> trades;
     for(const Command& c : commands){
         trades.clear();
         switch(c.action){
             case Action::Limit:
-                if(!book.addLimit(c.order, trades)){
-                    cout << "Order " << c.order.id << " rejected: price " << c.order.price << " out of range\n";
+                switch(book.addLimit(c.order, trades)){
+                    case AddResult::Accepted: break;
+                    case AddResult::PriceOutOfRange:
+                        cout << "Order " << c.order.id << " rejected: price " << c.order.price << " out of range\n";
+                        break;
+                    case AddResult::IdOutOfRange:
+                        cout << "Order " << c.order.id << " rejected: id out of range\n";
+                        break;
+                    case AddResult::DuplicateId:
+                        cout << "Order " << c.order.id << " rejected: id already resting in book\n";
+                        break;
                 }
                 printTrades(trades);
                 break;

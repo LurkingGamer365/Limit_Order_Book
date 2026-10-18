@@ -1,18 +1,16 @@
 #ifndef ORDER_BOOK_H
 #define ORDER_BOOK_H
 
-#include <functional>
-#include <list>
-#include <map>
-#include <unordered_map>
 #include <vector>
 #include "types.h"
 #include "book_side.h"
 
+enum class AddResult { Accepted, PriceOutOfRange, IdOutOfRange, DuplicateId };
+
 class OrderBook {
     public:
-        OrderBook(int base = 0, int size = 65536);
-        bool addLimit(Order o, std::vector<Trade>& trades);
+        explicit OrderBook(int maxOrderId, int base = 0, int size = 65536);
+        AddResult addLimit(Order o, std::vector<Trade>& trades);
         int addMarket(Order o, std::vector<Trade>& trades);
         bool cancel(int id);
         void print() const;
@@ -22,7 +20,7 @@ class OrderBook {
 
         BookSide bids;
         BookSide asks;
-        std::unordered_map<int, OrderLocation> orders;
+        std::vector<OrderLocation> orders;
 };
 
 #endif

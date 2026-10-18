@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -38,4 +39,10 @@ bool Parser::parse(vector<Command>& commands){
         }
     }
     return true;
+}
+
+int maxOrderId(const vector<Command>& commands){
+    int highest = 0;
+    for(const Command& c : commands) highest = max(highest, c.order.id);
+    return highest;
 }

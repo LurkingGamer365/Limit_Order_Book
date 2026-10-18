@@ -1,0 +1,8 @@
+Order 1 rejected: id already resting in book
+Order -1 rejected: id out of range
+Cancel -1 rejected: not resting in book
+Cancelled 1
+TRADE 4 @ 1005 (aggressor 2, resting 1)
+Cancelled 1
+--- ASKS ---
+--- BIDS ---
