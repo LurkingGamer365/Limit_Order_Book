@@ -195,18 +195,35 @@ The remaining worst cases (about 10 to 16 µs) are rare one-offs. They're likely
 
 </details>
 
-### Finding the worst case: pre-sizing the order map
+### Finding the worst case
 
-This was an experiment to find what causes the ~240 µs worst case, not a change to the code. The id lookup map (`std::unordered_map`) was pre-sized with `orders.reserve(1 << 20)`, so it never has to grow during a run. Both versions ran alternately on the same 1,000,000 orders (on battery power, so compare these runs only with each other). Each figure is the median of 3 runs.
+This was an investigation into the ~240 µs worst case of the flat array version, not a change to the code. All of it was measured on battery power, so compare its numbers only with each other.
+
+**1. Pre-sizing the map.** The id lookup map (`std::unordered_map`) was pre-sized with `orders.reserve(1 << 20)`, so it never has to grow during a run. Both versions ran alternately on the same 1,000,000 orders. Each figure is the median of 3 runs.
 
 | | Throughput | Limit mean | Limit p99.9 | Limit max | Cancel max |
 |---|---:|---:|---:|---:|---:|
-| Current code | 16.4 M orders/s | 69 ns | 458 ns | 239,583 ns | 25,959 ns |
+| Flat array price levels | 16.4 M orders/s | 69 ns | 458 ns | 239,583 ns | 25,959 ns |
 | Map pre-sized | **18.4 M orders/s** | **59 ns** | **416 ns** | **35,334 ns** | **24,750 ns** |
 
 Both versions produce the same checksum, so they did identical work.
 
-The worst case for limit orders fell from about 240 µs to about 35 µs. The spike came from the map growing: when an `unordered_map` fills past its capacity, it allocates a bigger table and re-inserts every entry at once, and with hundreds of thousands of live orders that takes hundreds of microseconds. That led to the flat order index above, which avoids the rebuild, the hashing and the per-order allocation.
+An `unordered_map` allocates memory in two ways: a small node for every entry on every insert, and a bucket array that gets rebuilt when the map grows (a rehash: allocate a bigger array, re-insert every entry, free the old one). Pre-sizing removes the rehashes but not the per-entry allocations. The worst case still fell from about 240 µs to about 35 µs, so the spike comes from rehashing, not from the everyday allocations.
+
+**2. Catching the rehash directly.** The benchmark was temporarily changed to record the map's bucket count before and after every operation. In all 3 runs, the slowest operation was the same one, #508,874 (242 to 295 µs), and it was exactly the operation that grew the map from 25,717 to 51,437 buckets. The previous rehash (12,853 to 25,717 buckets) was among the four slowest operations in every run, at 110 to 142 µs. Slow operations without a rehash (about 55 to 180 µs) fell on different operations in each run, which points at interruptions by the operating system rather than anything in the code.
+
+The bucket counts also show the map held only about 25,000 orders at the biggest rehash. Most generated orders are cancelled or filled quickly, so only tens of thousands rest in the book at a time.
+
+**3. Splitting a rehash into its parts.** A separate test timed the two parts of a rehash at the same size (about 25,700 entries, 51,437 buckets), as the median of 3 runs:
+
+| Part | Time |
+|---|---:|
+| Allocate the new bucket array and write every bucket | ~17 µs |
+| The whole rehash, including re-inserting every entry | ~180 to 200 µs |
+
+So about 90% of a rehash is re-inserting entries: each node is a separate allocation somewhere in memory, and each one has to be found and relinked into its new bucket. The test ran in isolation, so its numbers are a little lower than the real run's.
+
+These findings led to the flat order index above. A vector sized up front never rehashes, and has no per-entry nodes to allocate or relink.
 
 ## Roadmap
 
