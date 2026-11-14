@@ -164,7 +164,12 @@ The clock ticks every 41 ns on this machine, so each latency is rounded to a mul
 
 Overall, the current version handles 6.2 times as many orders per second as the baseline.
 
-The remaining worst cases (about 10 to 16 µs) are rare one-offs. They're likely interruptions by the operating system, plus page faults the first time each part of the pre-allocated memory is touched. Touching every page in the constructor would rule out the second cause.
+**The remaining worst cases** (about 10 to 16 µs) don't come from the order book's code. A temporary change to the benchmark recorded, for every operation, how long it took and how many trades it produced. Across 3 runs on the same orders:
+- **The slowest operations were different in every run.** None of the 10 slowest repeated. A cause in the code would slow the same operations each time, as the rehash did.
+- **They were trivial operations:** almost all produced no trades, just resting or cancelling one order.
+- **The busiest operations were fast:** the most trades from any single operation was 7, and it took 166 to 625 ns.
+
+So the worst cases are ordinary operations stalled by something outside the program, such as the operating system interrupting it, the scheduler moving it between cores, or the CPU changing speed. Those runs were on battery power, and the worst cases grew to 87 to 170 µs while the code stayed the same, which fits that explanation. The usual way to reduce stalls like these is on Linux: reserve CPU cores for the program, pin it to one, and fix the CPU's speed.
 
 <details>
 <summary>Full latency tables for earlier versions</summary>
